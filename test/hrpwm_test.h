@@ -28,21 +28,31 @@
 #define HRPWMA_GPIO_A_MUX       GPIO_0_EPWM1_A
 #define HRPWMA_GPIO_B_MUX       GPIO_1_EPWM1_B
 #define HRPWMA_BASE             EPWM1_BASE
-#define HRPWMA_FREQ             20000U	// 频率 20Khz
-#define HRPWMA_DUTY             0.5002f	// 占空比 50.02%
-#define HRPWMA_DEADTIME_US      1.0f	// 上升沿下降沿死区时间
+#define HRPWMA_FREQ             20000U
+#define HRPWMA_DUTY             0.5002f
+#define HRPWMA_DEADTIME_US      1.0f
+#if PLAN == 2
+#define HRPWMA_PERIOD           (DEVICE_AHBCLK_FREQ / HRPWMA_FREQ)
+#define HRPWMA_PHASE            0.0f
+#else
 #define HRPWMA_PERIOD           (DEVICE_AHBCLK_FREQ / (HRPWMA_FREQ * 2U))
+#endif
 
 /* ---- HRPWMB: 独立 (GPIO7=EPWM2A) ---- */
 #define HRPWMB_GPIO_A           7
 #define HRPWMB_GPIO_A_MUX       GPIO_7_EPWM2_A
 #define HRPWMB_BASE             EPWM2_BASE
-#define HRPWMB_FREQ             20000U	// 频率 20Khz
-#define HRPWMB_DUTY             0.5005f	// 占空比 50.05%
+#define HRPWMB_FREQ             20000U
+#define HRPWMB_DUTY             0.5005f
+#if PLAN == 2
+#define HRPWMB_PERIOD           (DEVICE_AHBCLK_FREQ / HRPWMB_FREQ)
+#else
 #define HRPWMB_PERIOD           (DEVICE_AHBCLK_FREQ / (HRPWMB_FREQ * 2U))
+#endif
 
 extern volatile float hrpwma_duty;
 extern volatile float hrpwmb_duty;
+extern volatile uint32_t hrpwm_period;
 
 void hrpwm_test_init(void);
 void hrpwm_test_run(void);

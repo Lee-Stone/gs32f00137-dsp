@@ -22,8 +22,20 @@
 #include "inc/hw_types.h"
 #include "inc/hw_memmap.h"
 
+/* ==== 方案选择 ============================================
+ * PLAN 1: 硬件死区互补（UP-DOWN）
+ * PLAN 2: 四比较值软件互补（UP）
+ * ========================================================= */
+#define PLAN 2
+
 void HRPWM_GPIO_Init(uint32_t a_mux, uint32_t a_pin, uint32_t b_mux, uint32_t b_pin);
+
+#if PLAN == 1
 void HRPWM_Module_Init(uint32_t base, uint16_t period, bool enableDeadband, float deadtimeUs);
-void HRPWM_SetDuty(uint32_t base, uint16_t period, float duty, uint32_t compModuleA, uint32_t compModuleB);
+void HRPWM_SetDuty(uint32_t base, float f32Duty);
+#elif PLAN == 2
+void HRPWM_Module_Init(uint32_t base, uint16_t period);
+void HRPWM_Update(uint32_t base, uint16_t period, uint32_t cmpa, uint32_t cmpb, uint32_t cmpc, uint32_t cmpd);
+#endif
 
 #endif /* BSP_HRPWM_H_ */

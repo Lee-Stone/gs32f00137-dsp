@@ -20,36 +20,69 @@
 
 volatile float hrpwma_duty = HRPWMA_DUTY;
 volatile float hrpwmb_duty = HRPWMB_DUTY;
+volatile uint32_t hrpwm_period = HRPWMA_PERIOD;
 
-/* ---- HRPWM test init ---- */
 void hrpwm_test_init(void)
 {
-    /* ---- 时钟同步暂停 ---- */
     SysCtl_disablePeripheral(SYSCTL_PERIPH_CLK_TBCLKSYNC);
 
     /* ---- HRPWMA: 互补 (GPIO0/1, EPWM1) ---- */
     HRPWM_GPIO_Init(HRPWMA_GPIO_A_MUX, HRPWMA_GPIO_A, HRPWMA_GPIO_B_MUX, HRPWMA_GPIO_B);
-    HRPWM_Module_Init(HRPWMA_BASE, HRPWMA_PERIOD, true, HRPWMA_DEADTIME_US);
-    HRPWM_SetDuty(HRPWMA_BASE, HRPWMA_PERIOD, HRPWMA_DUTY, HRPWM_COUNTER_COMPARE_A, HRPWM_COUNTER_COMPARE_B);
-
     /* ---- HRPWMB: 独立 (GPIO7, EPWM2) ---- */
     HRPWM_GPIO_Init(HRPWMB_GPIO_A_MUX, HRPWMB_GPIO_A, 0, 0);
-    HRPWM_Module_Init(HRPWMB_BASE, HRPWMB_PERIOD, false, 0.0f);
-    HRPWM_SetDuty(HRPWMB_BASE, HRPWMB_PERIOD, HRPWMB_DUTY, HRPWM_COUNTER_COMPARE_A, 0);
 
-    /* ---- 时钟同步恢复 ---- */
+#if PLAN == 1
+    HRPWM_Module_Init(HRPWMA_BASE, HRPWMA_PERIOD, true, HRPWMA_DEADTIME_US);
+    HRPWM_SetDuty(HRPWMA_BASE, HRPWMA_DUTY);
+
+    HRPWM_Module_Init(HRPWMB_BASE, HRPWMB_PERIOD, false, 0.0f);
+    HRPWM_SetDuty(HRPWMB_BASE, HRPWMB_DUTY);
+#else
+	uint32_t cmpa, cmpb, cmpc, cmpd;
+	uint32_t dt;
+
+	/* ---- HRPWMA: 互补 (GPIO0/1, EPWM1) ---- */
+	HRPWM_Module_Init(HRPWMA_BASE, HRPWMA_PERIOD);
+	cmpa = (uint32_t)(HRPWMA_PHASE * HRPWMA_PERIOD * 256.0f);
+	cmpb = (uint32_t)((HRPWMA_PHASE + HRPWMA_DUTY) * HRPWMA_PERIOD * 256.0f);
+	dt   = (uint32_t)(DEVICE_AHBCLK_FREQ * HRPWMA_DEADTIME_US / 1000000U) * 256U;
+	cmpc = cmpa + dt;
+	cmpd = cmpb + dt;
+	HRPWM_Update(HRPWMA_BASE, HRPWMA_PERIOD, cmpa, cmpb, cmpc, cmpd);
+
+	/* ---- HRPWMB: 独立 (GPIO7, EPWM2) ---- */
+	HRPWM_Module_Init(HRPWMB_BASE, HRPWMB_PERIOD);
+	cmpa = 256;
+	cmpb = (uint32_t)(HRPWMB_DUTY * HRPWMB_PERIOD * 256.0f);
+	HRPWM_Update(HRPWMB_BASE, HRPWMB_PERIOD, cmpa, cmpb, 0, 0);
+#endif
+
     SysCtl_enablePeripheral(SYSCTL_PERIPH_CLK_TBCLKSYNC);
 }
 
-/* ---- HRPWM test run ---- */
 void hrpwm_test_run(void)
 {
-	 /* 示波器查看 GPIO0 GPIO1 GPIO7, GDB 修改 hrpwma_duty 和 hrpwmb_duty*/
+    while(1)
+    {
+#if PLAN == 1
+        HRPWM_SetDuty(HRPWMA_BASE, hrpwma_duty);
+        HRPWM_SetDuty(HRPWMB_BASE, hrpwmb_duty);
+#else
+		uint32_t cmpa, cmpb, cmpc, cmpd;
+		uint32_t dt;
 
-	while(1)
-	{
-		HRPWM_SetDuty(HRPWMA_BASE, HRPWMA_PERIOD, hrpwma_duty, HRPWM_COUNTER_COMPARE_A, HRPWM_COUNTER_COMPARE_B);
-		HRPWM_SetDuty(HRPWMB_BASE, HRPWMB_PERIOD, hrpwmb_duty, HRPWM_COUNTER_COMPARE_A, 0);
-		DELAY_US(1000 * 200);
-	}
+		/* ---- HRPWMA: 互补 (GPIO0/1, EPWM1) ---- */
+		cmpa = (uint32_t)(HRPWMA_PHASE * hrpwm_period * 256.0f);
+		cmpb = (uint32_t)((HRPWMA_PHASE + hrpwma_duty) * hrpwm_period * 256.0f);
+		dt   = (uint32_t)(DEVICE_AHBCLK_FREQ * HRPWMA_DEADTIME_US / 1000000U) * 256U;
+		cmpc = cmpa + dt;
+		cmpd = cmpb + dt;
+		HRPWM_Update(HRPWMA_BASE, (uint16_t)hrpwm_period, cmpa, cmpb, cmpc, cmpd);
+
+		/* ---- HRPWMB: 独立 (GPIO7, EPWM2) ---- */
+		cmpa = 256;
+		cmpb = (uint32_t)(hrpwmb_duty * hrpwm_period * 256.0f);
+		HRPWM_Update(HRPWMB_BASE, (uint16_t)hrpwm_period, cmpa, cmpb, 0, 0);
+#endif
+    }
 }

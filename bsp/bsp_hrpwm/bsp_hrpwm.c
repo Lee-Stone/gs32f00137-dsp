@@ -43,7 +43,11 @@ void HRPWM_GPIO_Init(uint32_t a_mux, uint32_t a_pin, uint32_t b_mux, uint32_t b_
 }
 
 /* ---- HRPWM 模块初始化 ---- */
+#if PLAN == 1
 void HRPWM_Module_Init(uint32_t base, uint16_t period, bool enableDeadband, float deadtimeUs)
+#elif PLAN == 2
+void HRPWM_Module_Init(uint32_t base, uint16_t period)
+#endif
 {
     /* 时钟分频：/1，不分配 */
     HRPWM_setClockPrescaler(base, EPWM_CLOCK_DIVIDER_1, EPWM_HSCLOCK_DIVIDER_1);
@@ -51,22 +55,30 @@ void HRPWM_Module_Init(uint32_t base, uint16_t period, bool enableDeadband, floa
     EPWM_setTimeBasePeriod(base, period);
     /* 计数器清零 */
     HRPWM_setTimeBaseCounter(base, 0);
-    /* 增减计数模式 */
+
+#if PLAN == 1
+    /* ---- PLAN 1: 增减计数 + 硬件死区互补 ---- */
     HRPWM_setTimeBaseCounterMode(base, EPWM_COUNTER_MODE_UP_DOWN);
+#elif PLAN == 2
+    /* ---- PLAN 2: 上升计数 + 四比较值独立控制 ---- */
+    HRPWM_setTimeBaseCounterMode(base, EPWM_COUNTER_MODE_UP);
+    EPWM_setEmulationMode(base, EPWM_EMULATION_FREE_RUN);
+#endif
+
     /* 禁止相位加载 */
     EPWM_disablePhaseShiftLoad(base);
     /* 相位偏移 = 0 */
     EPWM_setPhaseShift(base, 0);
 
-    /* CMPA：计数器归零时加载 */
+#if PLAN == 1
+    /* CMPA/B 影子加载 */
     HRPWM_setCounterCompareShadowLoadMode(base, HRPWM_COUNTER_COMPARE_A, EPWM_COMP_LOAD_ON_CNTR_ZERO);
-    /* CMPB：计数器归零时加载 */
     HRPWM_setCounterCompareShadowLoadMode(base, HRPWM_COUNTER_COMPARE_B, EPWM_COMP_LOAD_ON_CNTR_ZERO);
 
-    /* A 输出：UP_CMPA 变高，DOWN_CMPA 变低 */
+    /* A: UP_CMPA高, DOWN_CMPA低 */
     HRPWM_setActionQualifierAction(base, EPWM_AQ_OUTPUT_A, EPWM_AQ_OUTPUT_HIGH, EPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA);
     HRPWM_setActionQualifierAction(base, EPWM_AQ_OUTPUT_A, EPWM_AQ_OUTPUT_LOW, EPWM_AQ_OUTPUT_ON_TIMEBASE_DOWN_CMPA);
-    /* B 输出：UP_CMPA 变低，DOWN_CMPA 变高（互补） */
+    /* B: UP_CMPA低, DOWN_CMPA高（硬件互补） */
     HRPWM_setActionQualifierAction(base, EPWM_AQ_OUTPUT_B, EPWM_AQ_OUTPUT_LOW, EPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA);
     HRPWM_setActionQualifierAction(base, EPWM_AQ_OUTPUT_B, EPWM_AQ_OUTPUT_HIGH, EPWM_AQ_OUTPUT_ON_TIMEBASE_DOWN_CMPA);
 
@@ -74,35 +86,55 @@ void HRPWM_Module_Init(uint32_t base, uint16_t period, bool enableDeadband, floa
     if (enableDeadband)
     {
         uint16_t db_cnt = (uint16_t)(DEVICE_AHBCLK_FREQ * deadtimeUs / 1000000U);
-        /* 死区输入源：EPWMA */
         EPWM_setRisingEdgeDeadBandDelayInput(base, EPWM_DB_INPUT_EPWMA);
-        /* 上升沿死区极性：高有效 */
         EPWM_setDeadBandDelayPolarity(base, EPWM_DB_RED, EPWM_DB_POLARITY_ACTIVE_HIGH);
-        /* 使能上升沿死区 */
         EPWM_setDeadBandDelayMode(base, EPWM_DB_RED, true);
-        /* 下降沿死区极性：低有效 */
         EPWM_setDeadBandDelayPolarity(base, EPWM_DB_FED, EPWM_DB_POLARITY_ACTIVE_LOW);
-        /* 使能下降沿死区 */
         EPWM_setDeadBandDelayMode(base, EPWM_DB_FED, true);
-        /* 设置上升沿死区延时 */
         EPWM_setRisingEdgeDelayCount(base, db_cnt);
-        /* 设置下降沿死区延时 */
         EPWM_setFallingEdgeDelayCount(base, db_cnt);
     }
+
+#elif PLAN == 2
+    /* 使能 CMPA1/B1 扩展（B 通道独立比较器）— 必须 EPWM+HRPWM 都调 */
+    EPWM_enableCounterCompare_Extend(base);
+    HRPWM_enableCounterCompare_Extend(base);
+
+    /* CMPA/B 初值清零 + 影子加载（ZERO_PERIOD） */
+    EPWM_setCounterCompareValue(base, EPWM_COUNTER_COMPARE_A, 0);
+    HRPWM_setCounterCompareShadowLoadMode(base, HRPWM_COUNTER_COMPARE_A, EPWM_COMP_LOAD_ON_CNTR_ZERO_PERIOD);
+    EPWM_setCounterCompareValue(base, EPWM_COUNTER_COMPARE_B, 0);
+    HRPWM_setCounterCompareShadowLoadMode(base, HRPWM_COUNTER_COMPARE_B, EPWM_COMP_LOAD_ON_CNTR_ZERO_PERIOD);
+
+    /* CMPA1/B1 初值清零 + 影子加载 */
+    EPWM_setCounterCompareValue(base, EPWM_COUNTER_COMPARE_A1_EXT, 0);
+    HRPWM_setCounterCompareShadowLoadMode(base, EPWM_COUNTER_COMPARE_A1_EXT, EPWM_COMP_LOAD_ON_CNTR_ZERO_PERIOD);
+    EPWM_setCounterCompareValue(base, EPWM_COUNTER_COMPARE_B1_EXT, 0);
+    HRPWM_setCounterCompareShadowLoadMode(base, EPWM_COUNTER_COMPARE_B1_EXT, EPWM_COMP_LOAD_ON_CNTR_ZERO_PERIOD);
+
+    /* A: UP_CMPA高, UP_CMPB低 */
+    HRPWM_setActionQualifierAction(base, EPWM_AQ_OUTPUT_A, EPWM_AQ_OUTPUT_HIGH, EPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA);
+    HRPWM_setActionQualifierAction(base, EPWM_AQ_OUTPUT_A, EPWM_AQ_OUTPUT_LOW,  EPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPB);
+    EPWM_disableActionQualifierShadowLoadMode(base, EPWM_ACTION_QUALIFIER_A);
+
+    /* B: UP_CMPA1低, UP_CMPB1高 */
+    HRPWM_setActionQualifierAction(base, EPWM_AQ_OUTPUT_B, EPWM_AQ_OUTPUT_LOW,  EPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA1);
+    HRPWM_setActionQualifierAction(base, EPWM_AQ_OUTPUT_B, EPWM_AQ_OUTPUT_HIGH, EPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPB1);
+    EPWM_disableActionQualifierShadowLoadMode(base, EPWM_ACTION_QUALIFIER_B);
+#endif
 
     /* 使能 HRPWM 自动转换 */
     HRPWM_enableAutoConversion(base);
     /* 使能 HRPWM 校准 */
     HRPWM_enableCalibration(base);
-    /* A 通道 MEP 控制边沿：双边沿 */
+    /* MEP 边沿：双边沿 */
     HRPWM_setMEPEdgeSelect(base, HRPWM_CHANNEL_A, HRPWM_MEP_CTRL_RISING_AND_FALLING_EDGE);
-    /* A 通道事件：计数器归零或周期 */
-    HRPWM_setCounterCompareShadowLoadEvent(base, HRPWM_CHANNEL_A, HRPWM_LOAD_ON_CNTR_ZERO_PERIOD);
-    /* B 通道 MEP 控制边沿：双边沿 */
     HRPWM_setMEPEdgeSelect(base, HRPWM_CHANNEL_B, HRPWM_MEP_CTRL_RISING_AND_FALLING_EDGE);
-    /* B 通道事件：计数器归零或周期 */
+    /* 影子加载事件 */
+    HRPWM_setCounterCompareShadowLoadEvent(base, HRPWM_CHANNEL_A, HRPWM_LOAD_ON_CNTR_ZERO_PERIOD);
     HRPWM_setCounterCompareShadowLoadEvent(base, HRPWM_CHANNEL_B, HRPWM_LOAD_ON_CNTR_ZERO_PERIOD);
 
+#if PLAN == 1
     /* 使能增减计数兼容模式 */
     if (base == EPWM1_BASE) {
         HRPWM_enableUpDownInit_Compatible(HRPWM1_Compatible);
@@ -113,28 +145,38 @@ void HRPWM_Module_Init(uint32_t base, uint16_t period, bool enableDeadband, floa
     } else if (base == EPWM4_BASE) {
         HRPWM_enableUpDownInit_Compatible(HRPWM4_Compatible);
     }
+#endif
 
-    /* SFO 校准：测量实际 MEP 步长 */
+    /* SFO 校准 */
     SFO_Struct_deinit(&sfoParams);
     SFO_Struct_init(&sfoParams, 5);
     SFO(&sfoParams);
 }
 
-/* ---- HRPWM 高精度占空比设置 ---- */
-void HRPWM_SetDuty(uint32_t base, uint16_t period, float duty, uint32_t compModuleA, uint32_t compModuleB)
+#if PLAN == 1
+/* ---- PLAN 1: 浮点占空比 ---- */
+void HRPWM_SetDuty(uint32_t base, float f32Duty)
 {
-    uint32_t cmp_set;
+    uint16_t period;
 
-    /* UP-DOWN 模式：CMP = period * (1 - duty)，低 8 位 = MEP 小数 */
-    cmp_set = (uint32_t)((1.0f - duty) * period * 256.0f);
+    if      (base == EPWM1_BASE) period = EPWM_getTimeBasePeriod(base);
+    else if (base == EPWM2_BASE) period = EPWM_getTimeBasePeriod(base);
+    else return;
 
-    /* 设置 CMPA */
-    if (compModuleA == HRPWM_COUNTER_COMPARE_A) {
-        HRPWM_setCounterCompareValue_Compatible_Auto(base, HRPWM_COUNTER_COMPARE_A, cmp_set);
-    }
+    uint32_t cmp = (uint32_t)((1.0f - f32Duty) * period * 256.0f);
 
-    /* 设置 CMPB */
-    if (compModuleB == HRPWM_COUNTER_COMPARE_B) {
-        HRPWM_setCounterCompareValue_Compatible_Auto(base, HRPWM_COUNTER_COMPARE_B, cmp_set);
-    }
+    HRPWM_setCounterCompareValue_Compatible_Auto(base, HRPWM_COUNTER_COMPARE_A, cmp);
+    HRPWM_setCounterCompareValue_Compatible_Auto(base, HRPWM_COUNTER_COMPARE_B, cmp);
 }
+
+#elif PLAN == 2
+/* ---- 四比较值独立写入 + 动态调频 ---- */
+void HRPWM_Update(uint32_t base, uint16_t period, uint32_t cmpa, uint32_t cmpb, uint32_t cmpc, uint32_t cmpd)
+{
+    EPWM_setTimeBasePeriod(base, period);
+    HRPWM_setCounterCompareValue(base, HRPWM_COUNTER_COMPARE_A, cmpa);
+    HRPWM_setCounterCompareValue(base, HRPWM_COUNTER_COMPARE_B, cmpb);
+    HRPWM_setCounterCompareValue_Extend(base, EPWM_COUNTER_COMPARE_A1_EXT, cmpc);
+    HRPWM_setCounterCompareValue_Extend(base, EPWM_COUNTER_COMPARE_B1_EXT, cmpd);
+}
+#endif

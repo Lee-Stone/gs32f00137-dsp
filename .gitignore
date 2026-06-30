@@ -10,6 +10,7 @@
 /Sysmem1.2/
 /ILM3.0/
 /ILM/
+/Flash_ILM/
 
 # Build outputs
 *.bin
