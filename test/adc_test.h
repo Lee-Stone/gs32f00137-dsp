@@ -33,7 +33,7 @@
 #define ADC_CH3             ADC_CH_ADCIN0    /* pin7  = A0  */
 #define ADC_CH4             ADC_CH_ADCIN12   /* pin8  = A12 */
 #define ADC_CH5             ADC_CH_ADCIN8    /* pin9  = A8  */
-#define ADC_CH6             ADC_CH_ADCIN9    /* pin12 = A9  */
+#define ADC_CH6             ADC_CH_ADCIN9    /* pin13 = A9  */
 #define ADC_CH7             28U              /* internal temp*/
 
 #define ADC_SOC_COUNT       7U
