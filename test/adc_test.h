@@ -22,6 +22,11 @@
 #include "device.h"
 #include "bsp_adc.h"
 
+// ADC 采集触发源 1:EPWM触发  0:软件触发
+#define EPWM_TRIG 			1
+// DMA 搬运使能 1:DMA搬运  0:中断读取
+#define DMA_EN   			0
+
 #define ADC_BASE            ADCA_BASE
 
 /* ---- ADC 采样窗口（SYSCLK 周期数） ---- */
@@ -44,5 +49,10 @@ extern volatile uint16_t adc_results[ADC_SOC_COUNT];
 void adc_test_init(void);
 void adc_test_run(void);
 void ADC_ReadResults(void);
+
+#if DMA_EN == 0
+/* CPUTimer ISR 中手动读取 ADC 结果 */
+void ADC_ISR_ReadResults(void);
+#endif
 
 #endif /* ADC_TEST_H_ */
